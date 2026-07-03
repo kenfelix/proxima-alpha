@@ -5,7 +5,7 @@ import { doc, getDoc, collection, onSnapshot, addDoc, updateDoc, query, orderBy,
 import { db } from "@/lib/firebase";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { MapPin, Calendar, Clock, CheckCircle2, Circle, Users, ListTodo, Send } from "lucide-react";
+import { MapPin, Calendar, Clock, CheckCircle2, Circle, Users, ListTodo, Send, Share } from "lucide-react";
 import { toast } from "sonner";
 
 export default function EventHubPage({ params }: { params: Promise<{ id: string }> }) {
@@ -122,6 +122,12 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
     }
   };
 
+  const handleShare = () => {
+    const url = `${window.location.origin}/events/${eventId}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Invite link copied to clipboard!");
+  };
+
   if (!event) return (
     <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
       <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -148,25 +154,32 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
               </h1>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center -space-x-3 mr-2">
-                {rsvps.slice(0, 5).map((rsvp, idx) => (
-                  <div 
-                    key={rsvp.id} 
-                    className="w-10 h-10 rounded-full bg-neutral-800 border-2 border-neutral-900 flex items-center justify-center text-lg shadow-lg relative group"
-                    style={{ zIndex: 10 - idx }}
-                    title={rsvp.name}
-                  >
-                    {rsvp.avatar}
-                  </div>
-                ))}
-                {rsvps.length > 5 && (
-                  <div className="w-10 h-10 rounded-full bg-neutral-800 border-2 border-neutral-900 flex items-center justify-center text-xs font-bold z-0">
-                    +{rsvps.length - 5}
-                  </div>
-                )}
+            <div className="flex flex-wrap items-center gap-4 mt-4 md:mt-0">
+              <div className="flex items-center gap-2 bg-neutral-950/50 p-1.5 pr-4 rounded-full border border-neutral-800/50">
+                <div className="flex items-center -space-x-2">
+                  {rsvps.slice(0, 5).map((rsvp, idx) => (
+                    <div 
+                      key={rsvp.id} 
+                      className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-900 flex items-center justify-center text-sm shadow-sm relative group"
+                      style={{ zIndex: 10 - idx }}
+                      title={rsvp.name}
+                    >
+                      {rsvp.avatar}
+                    </div>
+                  ))}
+                  {rsvps.length > 5 && (
+                    <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-900 flex items-center justify-center text-[10px] font-bold z-0">
+                      +{rsvps.length - 5}
+                    </div>
+                  )}
+                </div>
+                <div className="text-xs text-neutral-400 font-medium">{rsvps.length} going</div>
               </div>
-              <div className="text-sm text-neutral-400 font-medium">{rsvps.length} attending</div>
+              
+              <Button onClick={handleShare} variant="outline" className="rounded-full border-neutral-700 bg-neutral-900/50 hover:bg-neutral-800 text-neutral-300 h-9 px-4 text-xs font-semibold">
+                <Share className="w-3.5 h-3.5 mr-2" />
+                Invite
+              </Button>
             </div>
           </div>
         </motion.div>
@@ -178,27 +191,27 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="md:col-span-1 space-y-2 flex flex-row md:flex-col overflow-x-auto pb-2 md:pb-0"
+            className="md:col-span-1 space-y-2 flex flex-row md:flex-col overflow-x-auto pb-2 md:pb-0 gap-2 md:gap-0"
           >
             <button 
               onClick={() => setActiveTab("chat")}
-              className={`flex-1 md:w-full flex items-center justify-center md:justify-start p-4 rounded-2xl transition-all whitespace-nowrap ${activeTab === "chat" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" : "bg-neutral-900/50 text-neutral-400 hover:bg-neutral-800"}`}
+              className={`flex-1 md:w-full flex items-center justify-center md:justify-start p-3 rounded-xl transition-all whitespace-nowrap text-sm ${activeTab === "chat" ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20" : "bg-neutral-900/50 text-neutral-400 hover:bg-neutral-800"}`}
             >
-              <Users className="w-5 h-5 md:mr-3" />
+              <Users className="w-4 h-4 md:mr-2" />
               <span className="font-medium hidden md:inline">Group Chat</span>
             </button>
             <button 
               onClick={() => setActiveTab("checklist")}
-              className={`flex-1 md:w-full flex items-center justify-center md:justify-start p-4 rounded-2xl transition-all whitespace-nowrap ${activeTab === "checklist" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" : "bg-neutral-900/50 text-neutral-400 hover:bg-neutral-800"}`}
+              className={`flex-1 md:w-full flex items-center justify-center md:justify-start p-3 rounded-xl transition-all whitespace-nowrap text-sm ${activeTab === "checklist" ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20" : "bg-neutral-900/50 text-neutral-400 hover:bg-neutral-800"}`}
             >
-              <ListTodo className="w-5 h-5 md:mr-3" />
+              <ListTodo className="w-4 h-4 md:mr-2" />
               <span className="font-medium hidden md:inline">Checklist</span>
             </button>
             <button 
               onClick={() => setActiveTab("details")}
-              className={`flex-1 md:w-full flex items-center justify-center md:justify-start p-4 rounded-2xl transition-all whitespace-nowrap ${activeTab === "details" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20" : "bg-neutral-900/50 text-neutral-400 hover:bg-neutral-800"}`}
+              className={`flex-1 md:w-full flex items-center justify-center md:justify-start p-3 rounded-xl transition-all whitespace-nowrap text-sm ${activeTab === "details" ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20" : "bg-neutral-900/50 text-neutral-400 hover:bg-neutral-800"}`}
             >
-              <MapPin className="w-5 h-5 md:mr-3" />
+              <MapPin className="w-4 h-4 md:mr-2" />
               <span className="font-medium hidden md:inline">Logistics</span>
             </button>
           </motion.div>

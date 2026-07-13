@@ -50,6 +50,7 @@ export interface Hangout {
   
   // Payment Details (Option A: Manual Ledger)
   pricingModel: 'per_person' | 'split_total' | 'free';
+  currency?: string;
   totalCost?: number;
   perPersonCost?: number;
   requiredAttendees?: number;

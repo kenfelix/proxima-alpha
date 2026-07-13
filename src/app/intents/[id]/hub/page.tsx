@@ -34,6 +34,7 @@ export default function HangoutPlannerPage() {
   const [selectedPollId, setSelectedPollId] = useState<string | null>(null);
   const [pricingModel, setPricingModel] = useState<'free' | 'per_person' | 'split_total'>('free');
   const [pricingValue, setPricingValue] = useState("");
+  const [currency, setCurrency] = useState("$");
 
   useEffect(() => {
     async function loadData() {
@@ -171,7 +172,8 @@ export default function HangoutPlannerPage() {
       confirmedVenue: winningPoll.venue,
       pricingModel,
       perPersonCost,
-      totalCost
+      totalCost,
+      currency
     });
 
     setHangout({
@@ -181,7 +183,8 @@ export default function HangoutPlannerPage() {
       confirmedVenue: winningPoll.venue,
       pricingModel,
       perPersonCost,
-      totalCost
+      totalCost,
+      currency
     });
 
     setShowPricingModal(false);
@@ -377,11 +380,11 @@ export default function HangoutPlannerPage() {
               {hangout.pricingModel !== 'free' && (
                 <div className="bg-neutral-900/50 p-4 rounded-2xl mb-6 border border-neutral-800">
                   {hangout.pricingModel === 'per_person' ? (
-                    <p className="text-white font-medium">Cost per person: <span className="text-xl font-bold">${hangout.perPersonCost}</span></p>
+                    <p className="text-white font-medium">Cost per person: <span className="text-xl font-bold">{hangout.currency || '$'}{hangout.perPersonCost}</span></p>
                   ) : (
                     <div>
-                      <p className="text-neutral-300 text-sm mb-1">Total Cost: <span className="text-white font-semibold">${hangout.totalCost}</span> (Split among {intent?.interestedUsers.length} people)</p>
-                      <p className="text-white font-medium">Your Share: <span className="text-xl font-bold">${hangout.perPersonCost}</span></p>
+                      <p className="text-neutral-300 text-sm mb-1">Total Cost: <span className="text-white font-semibold">{hangout.currency || '$'}{hangout.totalCost}</span> (Split among {intent?.interestedUsers.length} people)</p>
+                      <p className="text-white font-medium">Your Share: <span className="text-xl font-bold">{hangout.currency || '$'}{hangout.perPersonCost}</span></p>
                     </div>
                   )}
                 </div>
@@ -398,7 +401,7 @@ export default function HangoutPlannerPage() {
                     <p className="text-sm text-neutral-400 mt-1">Wait for attendees to send money. Once you confirm receipt in your bank app, mark them as paid below.</p>
                     <div className="mt-3 pt-3 border-t border-neutral-800 flex justify-between items-center">
                       <span className="text-sm text-neutral-400">Total Collected:</span>
-                      <span className="text-lg font-bold text-white">${(hangout.attendees?.length || 0) * (hangout.perPersonCost || 0)}</span>
+                      <span className="text-lg font-bold text-white">{hangout.currency || '$'}{(hangout.attendees?.length || 0) * (hangout.perPersonCost || 0)}</span>
                     </div>
                   </div>
                   
@@ -464,7 +467,7 @@ export default function HangoutPlannerPage() {
                   className={`w-full text-left p-4 rounded-2xl border transition-all ${pricingModel === 'per_person' ? 'border-white bg-white/5' : 'border-neutral-800 hover:border-neutral-600'}`}
                 >
                   <p className="font-semibold text-white">Per Head</p>
-                  <p className="text-xs text-neutral-500 mt-1">Everyone pays a fixed fee (e.g. $5 gate fee).</p>
+                  <p className="text-xs text-neutral-500 mt-1">Everyone pays a fixed fee (e.g. {currency}5 gate fee).</p>
                 </button>
 
                 <button 
@@ -479,15 +482,28 @@ export default function HangoutPlannerPage() {
               {pricingModel !== 'free' && (
                 <div className="mb-6">
                   <label className="text-xs text-neutral-500 uppercase tracking-wider mb-2 block font-semibold">
-                    {pricingModel === 'per_person' ? 'Cost Per Person ($)' : 'Total Cost ($)'}
+                    {pricingModel === 'per_person' ? 'Cost Per Person' : 'Total Cost'}
                   </label>
-                  <input 
-                    type="number" 
-                    value={pricingValue} 
-                    onChange={(e) => setPricingValue(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white transition-all text-lg"
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-3 text-white focus:outline-none focus:border-white transition-all text-lg min-w-[70px] appearance-none"
+                    >
+                      <option value="$">$</option>
+                      <option value="€">€</option>
+                      <option value="£">£</option>
+                      <option value="₦">₦</option>
+                      <option value="₹">₹</option>
+                    </select>
+                    <input 
+                      type="number" 
+                      value={pricingValue} 
+                      onChange={(e) => setPricingValue(e.target.value)}
+                      placeholder="0.00"
+                      className="flex-1 bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white transition-all text-lg"
+                    />
+                  </div>
                 </div>
               )}
 

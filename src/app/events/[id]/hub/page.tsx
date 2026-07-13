@@ -34,24 +34,27 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
       const docRef = doc(db, "events", eventId);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        setEvent(docSnap.data());
+        const data = docSnap.data();
+        setEvent(data);
+        
+        // Fetch profiles for all attendees
+        if (data.attendees && Array.isArray(data.attendees)) {
+           const profiles = [];
+           for (const uid of data.attendees) {
+             const userProfile = await UserRepository.getUser(uid);
+             if (userProfile) {
+               profiles.push({
+                 id: userProfile.id,
+                 name: userProfile.name,
+                 avatar: userProfile.photoUrl || userProfile.name.charAt(0).toUpperCase()
+               });
+             }
+           }
+           setRsvps(profiles);
+        }
       }
     };
     fetchEvent();
-
-    // Listen to RSVPs & Notify
-    const rsvpQuery = query(collection(db, "events", eventId, "rsvps"), orderBy("timestamp", "asc"));
-    const unsubscribeRsvps = onSnapshot(rsvpQuery, (snapshot) => {
-      setRsvps(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added" && !isFirstLoad.current) {
-          const newRsvp = change.doc.data();
-          toast(`${newRsvp.name} ${newRsvp.avatar} just joined the hangout!`);
-        }
-      });
-      isFirstLoad.current = false;
-    });
 
     // Listen to Checklist
     const checklistQuery = query(collection(db, "events", eventId, "checklist"), orderBy("createdAt", "asc"));
@@ -66,7 +69,6 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
     });
 
     return () => {
-      unsubscribeRsvps();
       unsubscribeChecklist();
       unsubscribeMessages();
     };

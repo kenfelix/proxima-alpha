@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "sonner";
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+import { AuthProvider } from "@/contexts/AuthContext";
+import { Navigation } from "@/components/Navigation";
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 
 export const metadata: Metadata = {
-  title: "Proxima",
-  description: "Proxima helps you stay connected and organised with your friends and family.",
+  title: "Proxima - Disconnect to Connect",
+  description: "Plan hangouts and reconnect in person.",
 };
 
 export default function RootLayout({
@@ -23,14 +17,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
-        {children}
-        <Toaster theme="dark" position="top-center" />
+    <html lang="en">
+      <body className={`${outfit.variable} font-sans antialiased bg-black text-neutral-50 pb-20 selection:bg-neutral-800`}>
+        <AuthProvider>
+          {children}
+          <Navigation />
+        </AuthProvider>
       </body>
     </html>
   );
 }
+

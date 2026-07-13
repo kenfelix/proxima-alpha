@@ -1,135 +1,142 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { NotificationPrompt } from "@/components/NotificationPrompt";
+import { CreateIntentModal } from "@/components/CreateIntentModal";
+import { Plus, Compass, Clock, MapPin, Users } from "lucide-react";
+import Link from "next/link";
 
 export default function Home() {
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({
-    title: "",
-    date: "",
-    time: "",
-    location: "",
-    description: "",
-  });
+  const { user, loading } = useAuth();
+  const [intents, setIntents] = useState<any[]>([]);
+  const [isLoadingIntents, setIsLoadingIntents] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      // Add a new document with a generated id.
-      const docRef = await addDoc(collection(db, "events"), {
-        ...formData,
-        createdAt: serverTimestamp(),
-      });
-      console.log("Document written with ID: ", docRef.id);
-      
-      // Redirect to the newly created event's landing page
-      router.push(`/events/${docRef.id}`);
-    } catch (e) {
-      console.error("Error adding document: ", e);
-      alert("Failed to create event. Please try again.");
-      setIsSubmitting(false);
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
     }
-  };
+  }, [user, loading, router]);
+
+  useEffect(() => {
+    const fetchIntents = async () => {
+      if (!user) return;
+      try {
+        const q = query(
+          collection(db, "intents"),
+          where("interestedUsers", "array-contains", user.uid)
+        );
+        const snapshot = await getDocs(q);
+        const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        fetched.sort((a: any, b: any) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+        setIntents(fetched);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoadingIntents(false);
+      }
+    };
+    fetchIntents();
+  }, [user, isModalOpen]);
+
+  if (loading || !user) {
+    return (
+      <main className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-50 flex flex-col items-center justify-center p-6 sm:p-12 font-sans">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="max-w-md w-full bg-neutral-900/50 backdrop-blur-xl border border-neutral-800 p-8 rounded-3xl shadow-2xl"
-      >
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-br from-indigo-400 to-purple-400 bg-clip-text text-transparent mb-2">
-            Proxima Alpha
-          </h1>
-          <p className="text-neutral-400 text-sm">
-            Create an Intent. Facilitate Real-World Connection.
-          </p>
+    <main className="min-h-screen bg-black text-neutral-50 relative overflow-x-hidden font-sans pb-24">
+      <div className="max-w-2xl mx-auto w-full relative z-10 px-4 sm:px-6 pt-12">
+        <header className="mb-8 flex items-center justify-between border-b border-neutral-900 pb-4">
+          <h1 className="text-2xl font-bold text-white">Home</h1>
+        </header>
+
+        <NotificationPrompt />
+
+        <div className="mb-8">
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="w-full relative bg-[#0a0a0a] border border-neutral-800 rounded-2xl p-6 flex items-center justify-between transition-colors hover:bg-[#111]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-300">
+                <Compass size={24} />
+              </div>
+              <div className="text-left">
+                <h3 className="text-lg font-bold text-white">What's the move?</h3>
+                <p className="text-sm text-neutral-500">Post a plan to your circle.</p>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center">
+              <Plus size={20} strokeWidth={3} />
+            </div>
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider ml-1">What are we doing?</label>
-            <input 
-              required
-              name="title"
-              value={formData.title}
-              onChange={handleChange}
-              placeholder="e.g., Saturday Night Board Games" 
-              className="w-full bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-            />
+        {isLoadingIntents ? (
+          <div className="space-y-4">
+            {[1,2,3].map(i => (
+              <div key={i} className="h-32 bg-[#0a0a0a] border border-neutral-800 rounded-2xl animate-pulse"></div>
+            ))}
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider ml-1">Date</label>
-              <input 
-                required
-                type="date"
-                name="date"
-                value={formData.date}
-                onChange={handleChange}
-                className="w-full bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all [color-scheme:dark]"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider ml-1">Time</label>
-              <input 
-                required
-                type="time"
-                name="time"
-                value={formData.time}
-                onChange={handleChange}
-                className="w-full bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all [color-scheme:dark]"
-              />
-            </div>
+        ) : intents.length === 0 ? (
+          <div className="text-center py-20 bg-[#0a0a0a] border border-neutral-800 rounded-2xl">
+            <Users size={32} className="mx-auto text-neutral-600 mb-4" />
+            <h3 className="text-lg font-bold text-neutral-300 mb-2">No active plans</h3>
+            <p className="text-neutral-500 text-sm max-w-xs mx-auto">Create a plan above to see who's down.</p>
           </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider ml-1">Where are we going?</label>
-            <input 
-              required
-              name="location"
-              value={formData.location}
-              onChange={handleChange}
-              placeholder="e.g., Central Park, NYC" 
-              className="w-full bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-            />
+        ) : (
+          <div className="grid gap-0 border border-neutral-800 rounded-2xl overflow-hidden bg-[#0a0a0a]">
+            {intents.map((intent, i) => (
+              <Link 
+                href={`/intents/${intent.id}/hub`} 
+                key={intent.id}
+                className="block p-5 border-b border-neutral-800 last:border-b-0 hover:bg-[#111] transition-colors"
+              >
+                <h3 className="text-lg font-bold text-white mb-3 line-clamp-1">{intent.activity}</h3>
+                
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-neutral-500">
+                  <span className="flex items-center gap-1.5"><Clock size={16} /> {intent.timeframe}</span>
+                  <span className="flex items-center gap-1.5 truncate"><MapPin size={16} /> {intent.location}</span>
+                </div>
+                
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="flex -space-x-2">
+                    {intent.interestedUsers.slice(0, 5).map((u: string) => (
+                      <div key={u} className="w-7 h-7 rounded-full bg-neutral-800 border-2 border-[#0a0a0a] flex items-center justify-center text-[9px] font-bold text-neutral-400">
+                        {u.substring(0, 2).toUpperCase()}
+                      </div>
+                    ))}
+                    {intent.interestedUsers.length > 5 && (
+                      <div className="w-7 h-7 rounded-full bg-neutral-800 border-2 border-[#0a0a0a] flex items-center justify-center text-[9px] font-bold text-neutral-500">
+                        +{intent.interestedUsers.length - 5}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                    {intent.status === 'active' ? 'Drafting' : 'Planning'}
+                  </span>
+                </div>
+              </Link>
+            ))}
           </div>
+        )}
+      </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider ml-1">The Vibe (Optional)</label>
-            <textarea 
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              placeholder="Brief description of what to expect..." 
-              className="w-full bg-neutral-950/50 border border-neutral-800 rounded-xl px-4 py-3 text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all min-h-[100px] resize-y"
-            />
-          </div>
-
-          <Button 
-            type="submit" 
-            disabled={isSubmitting}
-            className="w-full py-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-lg shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all hover:shadow-[0_0_30px_rgba(79,70,229,0.5)]"
-          >
-            {isSubmitting ? "Generating Link..." : "Create Intent"}
-          </Button>
-        </form>
-      </motion.div>
+      <CreateIntentModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        userId={user.uid} 
+      />
     </main>
   );
 }

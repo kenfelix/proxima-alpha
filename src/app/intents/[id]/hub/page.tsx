@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -318,6 +318,50 @@ export default function HangoutPlannerPage() {
     }
   };
 
+  const handleLaunchEvent = async () => {
+    if (!hangout || !intent || !user) return;
+
+    try {
+      // 1. Create the event
+      const eventRef = doc(db, "events", hangout.id);
+      await setDoc(eventRef, {
+        title: hangout.title,
+        hostId: hangout.hostId,
+        attendees: hangout.attendees || [],
+        time: hangout.confirmedTime,
+        venue: hangout.confirmedVenue,
+        createdAt: serverTimestamp(),
+        intentId: intent.id
+      });
+
+      // 2. Update hangout status
+      const hangoutRef = doc(db, "hangouts", hangout.id);
+      await updateDoc(hangoutRef, {
+        status: 'completed'
+      });
+
+      // 3. Notify the confirmed roster (everyone except host, or even the host too)
+      const attendeesToNotify = (hangout.attendees || []).filter(id => id !== user.uid);
+      if (attendeesToNotify.length > 0) {
+        await NotificationService.sendNotification(
+          attendeesToNotify,
+          "We're on! 🚀",
+          `The roster for ${hangout.title} is locked. See you there!`,
+          `${window.location.origin}/events/${hangout.id}/hub`,
+          'system'
+        );
+      }
+
+      // 4. Redirect host to the new event hub
+      toast.success("Event Launched!");
+      router.push(`/events/${hangout.id}/hub`);
+      
+    } catch (error) {
+      console.error("Failed to launch event", error);
+      toast.error("Failed to launch event. Please try again.");
+    }
+  };
+
   const handleShare = () => {
     const url = `${window.location.origin}/intents/${intentId}`;
     if (navigator.share) {
@@ -528,6 +572,18 @@ export default function HangoutPlannerPage() {
                       );
                     })}
                   </div>
+                  
+                  <div className="mt-8 pt-8 border-t border-neutral-900">
+                    <Button 
+                      onClick={handleLaunchEvent}
+                      className="w-full py-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-full font-bold shadow-lg shadow-indigo-600/20 text-lg transition-all"
+                    >
+                      Lock Roster & Launch Event 🚀
+                    </Button>
+                    <p className="text-center text-xs text-neutral-500 mt-4">
+                      This will close the ledger, finalize the attendees, and open the live Event Hub.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -572,6 +628,25 @@ export default function HangoutPlannerPage() {
             </div>
           </div>
         )}
+
+        {hangout.status === 'completed' && (
+          <div className="text-center relative py-12">
+            <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl shadow-indigo-500/20">
+              <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
+            <h2 className="text-4xl font-bold mb-4 tracking-tight text-white">We're On! 🚀</h2>
+            <p className="text-neutral-400 mb-12 text-lg">
+              The roster has been locked and the event is live.
+            </p>
+            <Button 
+              onClick={() => router.push(`/events/${hangout.id}/hub`)}
+              className="w-full max-w-sm mx-auto py-8 bg-white hover:bg-neutral-200 text-black rounded-full font-bold text-xl transition-all"
+            >
+              Go to Live Event Hub
+            </Button>
+          </div>
+        )}
+
         {showPricingModal && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
             <div className="bg-neutral-950 border border-neutral-800 rounded-3xl p-6 w-full max-w-md">

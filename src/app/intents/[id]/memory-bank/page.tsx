@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import QRCode from "react-qr-code";
 import { doc, getDoc, collection, addDoc, query, onSnapshot, orderBy } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ export default function MemoryBankPage() {
   const [loading, setLoading] = useState(true);
   const [memories, setMemories] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchHangout() {
@@ -50,22 +51,34 @@ export default function MemoryBankPage() {
     const file = e.target.files?.[0];
     if (!file || !user || !hangout) return;
     setUploading(true);
+    setUploadProgress(0);
 
-    try {
-      const storageRef = ref(storage, `memories/${intentId}/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+    const storageRef = ref(storage, `memories/${intentId}/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
-      await addDoc(collection(db, "hangouts", intentId, "memories"), {
-        url,
-        uploadedBy: user.uid,
-        createdAt: new Date().getTime(),
-      });
-    } catch (err) {
-      console.error("Error uploading:", err);
-      alert("Failed to upload memory.");
-    }
-    setUploading(false);
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      }, 
+      (error) => {
+        console.error("Error uploading:", error);
+        alert("Failed to upload memory.");
+        setUploading(false);
+        setUploadProgress(null);
+      }, 
+      async () => {
+        const url = await getDownloadURL(uploadTask.snapshot.ref);
+        await addDoc(collection(db, "hangouts", intentId, "memories"), {
+          url,
+          uploadedBy: user.uid,
+          createdAt: new Date().getTime(),
+          type: file.type.startsWith('video/') ? 'video' : 'image'
+        });
+        setUploading(false);
+        setUploadProgress(null);
+      }
+    );
   };
 
   if (loading) return <div className="min-h-screen bg-neutral-950 flex items-center justify-center"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>;
@@ -135,7 +148,7 @@ export default function MemoryBankPage() {
                 <div>
                   <input 
                     type="file" 
-                    accept="image/*" 
+                    accept="image/*,video/*" 
                     className="hidden" 
                     ref={fileInputRef}
                     onChange={handleFileUpload}
@@ -143,10 +156,18 @@ export default function MemoryBankPage() {
                   <Button 
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    className="bg-white hover:bg-neutral-200 text-black rounded-full flex items-center gap-2 font-bold px-5"
+                    className="bg-white hover:bg-neutral-200 text-black rounded-full flex items-center gap-2 font-bold px-5 relative overflow-hidden"
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    {uploading ? "Uploading..." : "Add Photo"}
+                    {uploading && uploadProgress !== null && (
+                      <div 
+                        className="absolute left-0 top-0 bottom-0 bg-indigo-500/20" 
+                        style={{ width: `${uploadProgress}%` }} 
+                      />
+                    )}
+                    <svg className="w-5 h-5 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    <span className="relative z-10">
+                      {uploading ? (uploadProgress ? `Uploading ${Math.round(uploadProgress)}%` : "Uploading...") : "Add Photo/Video"}
+                    </span>
                   </Button>
                 </div>
               </div>
@@ -164,7 +185,11 @@ export default function MemoryBankPage() {
                       key={mem.id} 
                       className="aspect-square bg-neutral-800 rounded-2xl overflow-hidden relative group"
                     >
-                      <img src={mem.url} alt="Memory" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      {mem.type === 'video' ? (
+                        <video src={mem.url} controls className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      ) : (
+                        <img src={mem.url} alt="Memory" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
                         <p className="text-xs text-white font-medium">{new Date(mem.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>

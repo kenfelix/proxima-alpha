@@ -119,22 +119,6 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
         timestamp: serverTimestamp()
       });
       setNewMessageText("");
-      
-      // Notify other group members
-      try {
-        const otherUserIds = rsvps.filter(r => r.id !== profile.id).map(r => r.id);
-        if (otherUserIds.length > 0) {
-          await NotificationService.sendNotification(
-            otherUserIds,
-            `${profile.name} in ${event.title}`,
-            newMessageText,
-            `${window.location.origin}/events/${eventId}/hub`,
-            'chat'
-          );
-        }
-      } catch (e) {
-        console.error("Failed to notify chat", e);
-      }
     } catch (error) {
       console.error("Error sending message", error);
     }

@@ -442,6 +442,10 @@ export default function HangoutPlannerPage() {
               </div>
               {hangout.pricingModel !== 'free' && (
                 <div className="bg-neutral-900/50 p-4 rounded-2xl mb-6 border border-neutral-800">
+                  <div className="flex justify-between items-center mb-4 pb-4 border-b border-neutral-800">
+                    <span className="text-neutral-300 font-medium">Total Collected:</span>
+                    <span className="text-2xl font-bold text-green-400">{hangout.currency || '$'}{(hangout.attendees?.length || 0) * (hangout.perPersonCost || 0)}</span>
+                  </div>
                   {hangout.pricingModel === 'per_person' ? (
                     <p className="text-white font-medium">Cost per person: <span className="text-xl font-bold">{hangout.currency || '$'}{hangout.perPersonCost}</span></p>
                   ) : (
@@ -461,16 +465,12 @@ export default function HangoutPlannerPage() {
                 <div className="space-y-4">
                   <div className="border border-neutral-800 p-4 rounded-2xl">
                     <p className="text-sm text-white font-medium">Host Instructions:</p>
-                    <p className="text-sm text-neutral-400 mt-1">Wait for attendees to send money. Once you confirm receipt in your bank app, mark them as paid below.</p>
-                    <div className="mt-3 pt-3 border-t border-neutral-800 flex justify-between items-center">
-                      <span className="text-sm text-neutral-400">Total Collected:</span>
-                      <span className="text-lg font-bold text-white">{hangout.currency || '$'}{(hangout.attendees?.length || 0) * (hangout.perPersonCost || 0)}</span>
-                    </div>
+                    <p className="text-sm text-neutral-400 mt-1">Wait for attendees to send money. Once you confirm receipt in your bank app, mark them as paid below. (You can also mark yourself as paid to add your share to the total).</p>
                   </div>
                   
                   <div className="space-y-2 mt-4">
                     <h4 className="font-medium text-white mb-4">Attendee Ledger</h4>
-                    {intent.interestedUsers.filter(uid => uid !== user.uid).map(uid => {
+                    {intent.interestedUsers.map(uid => {
                       const hasPaid = hangout.attendees?.includes(uid);
                       const isPending = hangout.pendingPayments?.includes(uid);
                       

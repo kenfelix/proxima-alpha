@@ -166,7 +166,11 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
                       style={{ zIndex: 10 - idx }}
                       title={rsvp.name}
                     >
-                      {rsvp.avatar}
+                      {rsvp.avatar && rsvp.avatar.startsWith('http') ? (
+                        <img src={rsvp.avatar} alt={rsvp.name} className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        rsvp.avatar
+                      )}
                     </div>
                   ))}
                   {rsvps.length > 5 && (
@@ -249,8 +253,8 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
                       return (
                         <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} items-end gap-2`}>
                           {!isMe && (
-                            <div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center text-sm flex-shrink-0">
-                              {showAvatar ? msg.avatar : ""}
+                            <div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center text-sm flex-shrink-0 overflow-hidden">
+                              {showAvatar ? (msg.avatar && msg.avatar.startsWith('http') ? <img src={msg.avatar} alt={msg.name} className="w-full h-full object-cover" /> : msg.avatar) : ""}
                             </div>
                           )}
                           <div className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>

@@ -94,8 +94,12 @@ export default function SchedulePage() {
           </div>
           {profile && (
             <div className="flex flex-col items-center">
-              <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center text-3xl">
-                {profile.avatar}
+              <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center text-3xl overflow-hidden">
+                {profile.photoUrl ? (
+                  <img src={profile.photoUrl} alt={profile.name} className="w-full h-full object-cover" />
+                ) : (
+                  profile.name.charAt(0).toUpperCase()
+                )}
               </div>
               <p className="mt-2 text-sm font-medium">{profile.name}</p>
             </div>

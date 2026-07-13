@@ -240,17 +240,25 @@ export default function HangoutPlannerPage() {
       pendingPayments: updatedPending
     });
 
-    // Notify the user that their payment was verified
+    // Notify everyone except the person verifying (usually the host)
     try {
-      await NotificationService.sendNotification(
-        [userId],
-        "Payment Verified! 💸",
-        `Your spot for ${hangout.title} is officially secured.`,
-        `${window.location.origin}/intents/${hangout.id}/hub`,
-        'payment'
-      );
+      if (user) {
+        const usersToNotify = intent?.interestedUsers.filter(id => id !== user.uid) || [];
+        if (usersToNotify.length > 0) {
+          const paidProfile = interestedProfiles[userId];
+          const paidName = userId === user.uid ? 'The Host' : (paidProfile?.name || 'Someone');
+          
+          await NotificationService.sendNotification(
+            usersToNotify,
+            "Payment Verified! 💸",
+            `${paidName}'s payment for ${hangout.title} has been confirmed.`,
+            `${window.location.origin}/intents/${hangout.id}/hub`,
+            'payment'
+          );
+        }
+      }
     } catch (e) {
-      console.error("Failed to notify user of payment verification", e);
+      console.error("Failed to notify users of payment verification", e);
     }
   };
 

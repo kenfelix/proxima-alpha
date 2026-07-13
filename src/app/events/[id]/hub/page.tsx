@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { MapPin, Calendar, Clock, CheckCircle2, Circle, Users, ListTodo, Send, Share, Camera } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { UserRepository } from "@/lib/repositories/UserRepository";
+import { NotificationService } from "@/lib/services/NotificationService";
 
 export default function EventHubPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
@@ -118,6 +120,22 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
         timestamp: serverTimestamp()
       });
       setNewMessageText("");
+      
+      // Notify other group members
+      try {
+        const otherUserIds = rsvps.filter(r => r.id !== profile.id).map(r => r.id);
+        if (otherUserIds.length > 0) {
+          await NotificationService.sendNotification(
+            otherUserIds,
+            `${profile.name} in ${event.title}`,
+            newMessageText,
+            `${window.location.origin}/events/${eventId}/hub`,
+            'chat'
+          );
+        }
+      } catch (e) {
+        console.error("Failed to notify chat", e);
+      }
     } catch (error) {
       console.error("Error sending message", error);
     }

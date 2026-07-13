@@ -11,6 +11,7 @@ import { HangoutRepository } from "@/lib/repositories/HangoutRepository";
 import { Share } from "lucide-react";
 import { toast } from "sonner";
 import { UserRepository } from "@/lib/repositories/UserRepository";
+import { NotificationService } from "@/lib/services/NotificationService";
 
 export default function HangoutPlannerPage() {
   const params = useParams();
@@ -27,6 +28,12 @@ export default function HangoutPlannerPage() {
   // New Poll Form State
   const [newTime, setNewTime] = useState("");
   const [newVenue, setNewVenue] = useState("");
+
+  // Pricing Modal State
+  const [showPricingModal, setShowPricingModal] = useState(false);
+  const [selectedPollId, setSelectedPollId] = useState<string | null>(null);
+  const [pricingModel, setPricingModel] = useState<'free' | 'per_person' | 'split_total'>('free');
+  const [pricingValue, setPricingValue] = useState("");
 
   useEffect(() => {
     async function loadData() {
@@ -99,7 +106,7 @@ export default function HangoutPlannerPage() {
   };
 
   const handleVote = async (pollId: string) => {
-    if (!user || !hangout) return;
+    if (!user || !hangout || !intent) return;
     
     const updatedPolls = hangout.polls?.map(p => {
       if (p.id === pollId) {
@@ -115,82 +122,93 @@ export default function HangoutPlannerPage() {
     const hangoutRef = doc(db, "hangouts", hangout.id);
     await updateDoc(hangoutRef, { polls: updatedPolls });
     setHangout({ ...hangout, polls: updatedPolls });
+
+    // Notify interested users that someone voted
+    try {
+      const otherUsers = intent.interestedUsers.filter(uid => uid !== user.uid);
+      if (otherUsers.length > 0) {
+        await NotificationService.sendNotification(
+          otherUsers,
+          "New Vote! 🗳️",
+          `Someone just voted on the plan for ${intent.activity}. Check the Hub!`,
+          `${window.location.origin}/intents/${intent.id}/hub`,
+          'vote'
+        );
+      }
+    } catch (e) {
+      console.error("Failed to send vote push notification", e);
+    }
   };
 
-  const handleConfirmPlan = async (pollId: string) => {
-    if (!hangout || !intent) return;
-    const winningPoll = hangout.polls?.find(p => p.id === pollId);
+  const handleConfirmPlan = (pollId: string) => {
+    setSelectedPollId(pollId);
+    setShowPricingModal(true);
+  };
+
+  const handleFinalizePlan = async () => {
+    if (!hangout || !intent || !selectedPollId) return;
+    const winningPoll = hangout.polls?.find(p => p.id === selectedPollId);
     if (!winningPoll) return;
+
+    let perPersonCost = 0;
+    let totalCost = 0;
+    const numPeople = intent.interestedUsers.length;
+    const parsedValue = parseFloat(pricingValue) || 0;
+
+    if (pricingModel === 'per_person') {
+      perPersonCost = parsedValue;
+    } else if (pricingModel === 'split_total') {
+      totalCost = parsedValue;
+      perPersonCost = numPeople > 0 ? totalCost / numPeople : totalCost;
+    }
+
+    const nextStatus = pricingModel === 'free' ? 'confirmed' : 'collecting_funds';
 
     const hangoutRef = doc(db, "hangouts", hangout.id);
     await updateDoc(hangoutRef, {
-      status: 'collecting_funds',
+      status: nextStatus,
       confirmedTime: winningPoll.time,
-      confirmedVenue: winningPoll.venue
+      confirmedVenue: winningPoll.venue,
+      pricingModel,
+      perPersonCost,
+      totalCost
     });
 
     setHangout({
       ...hangout,
-      status: 'collecting_funds',
+      status: nextStatus,
       confirmedTime: winningPoll.time,
-      confirmedVenue: winningPoll.venue
+      confirmedVenue: winningPoll.venue,
+      pricingModel,
+      perPersonCost,
+      totalCost
     });
 
-    // Send Resend Digest automatically
-    try {
-      const emails: string[] = [];
-      for (const uid of intent.interestedUsers) {
-        const p = await UserRepository.getUser(uid);
-        if (p?.email) emails.push(p.email);
-      }
-      
-      if (emails.length > 0) {
-        const link = `${window.location.origin}/intents/${intent.id}/hub`;
-        await fetch('/api/digest', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            emails,
-            title: hangout.title,
-            time: winningPoll.time,
-            venue: winningPoll.venue,
-            link
-          })
-        });
-      }
-    } catch (e) {
-      console.error("Failed to send digest", e);
-    }
+    setShowPricingModal(false);
 
-    // Send Web Push Notifications automatically
+    // Send Notifications (In-App, Push, and Email Digest)
     try {
       if (user) {
-        const tokens: string[] = [];
-        for (const uid of intent.interestedUsers) {
-          if (uid !== user.uid) { // Don't push to the host triggering it
-            const p = await UserRepository.getUser(uid);
-            if (p?.deviceTokens && Array.isArray(p.deviceTokens)) {
-              tokens.push(...p.deviceTokens);
-            }
-          }
-        }
-        
-        if (tokens.length > 0) {
+        const otherUsers = intent.interestedUsers.filter(uid => uid !== user.uid);
+        if (otherUsers.length > 0) {
           const link = `${window.location.origin}/intents/${intent.id}/hub`;
-          await fetch('/api/push', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tokens,
-              title: "Plan Confirmed! 🎉",
-              body: `The details for ${hangout.title} have been finalized.`,
-              link
-            })
-          });
+          await NotificationService.sendNotification(
+            otherUsers,
+            "Plan Confirmed! 🎉",
+            `The details for ${hangout.title} have been finalized.`,
+            link,
+            'system',
+            true, // sendEmailDigest
+            {
+              title: hangout.title,
+              time: winningPoll.time,
+              venue: winningPoll.venue
+            }
+          );
         }
       }
     } catch (e) {
-      console.error("Failed to send push", e);
+      console.error("Failed to send finalization notifications", e);
     }
   };
 
@@ -211,6 +229,19 @@ export default function HangoutPlannerPage() {
       ...hangout,
       attendees: [...currentAttendees, userId]
     });
+
+    // Notify the user that their payment was verified
+    try {
+      await NotificationService.sendNotification(
+        [userId],
+        "Payment Verified! 💸",
+        `Your spot for ${hangout.title} is officially secured.`,
+        `${window.location.origin}/intents/${hangout.id}/hub`,
+        'payment'
+      );
+    } catch (e) {
+      console.error("Failed to notify user of payment verification", e);
+    }
   };
 
   const handleShare = () => {
@@ -343,6 +374,19 @@ export default function HangoutPlannerPage() {
                 </div>
                 <h3 className="font-semibold text-xl text-white">The Purse (Manual Ledger)</h3>
               </div>
+              {hangout.pricingModel !== 'free' && (
+                <div className="bg-neutral-900/50 p-4 rounded-2xl mb-6 border border-neutral-800">
+                  {hangout.pricingModel === 'per_person' ? (
+                    <p className="text-white font-medium">Cost per person: <span className="text-xl font-bold">${hangout.perPersonCost}</span></p>
+                  ) : (
+                    <div>
+                      <p className="text-neutral-300 text-sm mb-1">Total Cost: <span className="text-white font-semibold">${hangout.totalCost}</span> (Split among {intent?.interestedUsers.length} people)</p>
+                      <p className="text-white font-medium">Your Share: <span className="text-xl font-bold">${hangout.perPersonCost}</span></p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <p className="text-neutral-400 text-sm mb-6 leading-relaxed">
                 To secure your spot, please transfer your share directly to the host's account. The host will confirm your payment here.
               </p>
@@ -352,6 +396,10 @@ export default function HangoutPlannerPage() {
                   <div className="border border-neutral-800 p-4 rounded-2xl">
                     <p className="text-sm text-white font-medium">Host Instructions:</p>
                     <p className="text-sm text-neutral-400 mt-1">Wait for attendees to send money. Once you confirm receipt in your bank app, mark them as paid below.</p>
+                    <div className="mt-3 pt-3 border-t border-neutral-800 flex justify-between items-center">
+                      <span className="text-sm text-neutral-400">Total Collected:</span>
+                      <span className="text-lg font-bold text-white">${(hangout.attendees?.length || 0) * (hangout.perPersonCost || 0)}</span>
+                    </div>
                   </div>
                   
                   <div className="space-y-2 mt-4">
@@ -396,6 +444,71 @@ export default function HangoutPlannerPage() {
             </div>
           </div>
         )}
+        {showPricingModal && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+            <div className="bg-neutral-950 border border-neutral-800 rounded-3xl p-6 w-full max-w-md">
+              <h3 className="text-2xl font-bold text-white mb-2">Funding this Hangout</h3>
+              <p className="text-neutral-400 text-sm mb-6">How are we splitting the bill?</p>
+              
+              <div className="space-y-3 mb-6">
+                <button 
+                  onClick={() => { setPricingModel('free'); setPricingValue(""); }}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all ${pricingModel === 'free' ? 'border-white bg-white/5' : 'border-neutral-800 hover:border-neutral-600'}`}
+                >
+                  <p className="font-semibold text-white">Free</p>
+                  <p className="text-xs text-neutral-500 mt-1">Just hanging out. No money involved.</p>
+                </button>
+
+                <button 
+                  onClick={() => setPricingModel('per_person')}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all ${pricingModel === 'per_person' ? 'border-white bg-white/5' : 'border-neutral-800 hover:border-neutral-600'}`}
+                >
+                  <p className="font-semibold text-white">Per Head</p>
+                  <p className="text-xs text-neutral-500 mt-1">Everyone pays a fixed fee (e.g. $5 gate fee).</p>
+                </button>
+
+                <button 
+                  onClick={() => setPricingModel('split_total')}
+                  className={`w-full text-left p-4 rounded-2xl border transition-all ${pricingModel === 'split_total' ? 'border-white bg-white/5' : 'border-neutral-800 hover:border-neutral-600'}`}
+                >
+                  <p className="font-semibold text-white">Split Total</p>
+                  <p className="text-xs text-neutral-500 mt-1">Set a total goal. We divide it by {intent?.interestedUsers.length} people.</p>
+                </button>
+              </div>
+
+              {pricingModel !== 'free' && (
+                <div className="mb-6">
+                  <label className="text-xs text-neutral-500 uppercase tracking-wider mb-2 block font-semibold">
+                    {pricingModel === 'per_person' ? 'Cost Per Person ($)' : 'Total Cost ($)'}
+                  </label>
+                  <input 
+                    type="number" 
+                    value={pricingValue} 
+                    onChange={(e) => setPricingValue(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white transition-all text-lg"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <Button 
+                  onClick={() => setShowPricingModal(false)}
+                  className="flex-1 py-6 bg-neutral-900 hover:bg-neutral-800 text-white rounded-full font-bold"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleFinalizePlan}
+                  className="flex-1 py-6 bg-white hover:bg-neutral-200 text-black rounded-full font-bold"
+                >
+                  Confirm Plan
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </main>
   );

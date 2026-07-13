@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Intent, UserProfile } from "@/lib/types";
 import { UserRepository } from "@/lib/repositories/UserRepository";
+import { NotificationService } from "@/lib/services/NotificationService";
 
 export default function IntentDetailsPage() {
   const params = useParams();
@@ -68,6 +69,22 @@ export default function IntentDetailsPage() {
         ...intent,
         interestedUsers: [...intent.interestedUsers, user.uid]
       });
+
+      // Notify the creator
+      try {
+        if (creator) {
+          const joinerProfile = await UserRepository.getUser(user.uid);
+          await NotificationService.sendNotification(
+            [creator.id],
+            "Someone is Down! ✌️",
+            `${joinerProfile?.name || 'Someone'} is down for ${intent.activity}.`,
+            `${window.location.origin}/intents/${intentId}`,
+            'system'
+          );
+        }
+      } catch (e) {
+        console.error("Failed to notify creator", e);
+      }
     } catch (error) {
       console.error("Error joining intent:", error);
     }
@@ -88,7 +105,25 @@ export default function IntentDetailsPage() {
     }
   };
 
-  const startPlanner = () => {
+  const startPlanner = async () => {
+    if (!intent || !user) return;
+    
+    // Notify interested users that planning has started
+    try {
+      const otherUsers = intent.interestedUsers.filter(uid => uid !== user.uid);
+      if (otherUsers.length > 0) {
+        await NotificationService.sendNotification(
+          otherUsers,
+          "Planning Started! 📅",
+          `${creator?.name || 'The host'} is putting together a plan for ${intent.activity}. Head to the Hub!`,
+          `${window.location.origin}/intents/${intentId}/hub`,
+          'system'
+        );
+      }
+    } catch (e) {
+      console.error("Failed to send planning push notification", e);
+    }
+    
     router.push(`/intents/${intentId}/hub`);
   };
 

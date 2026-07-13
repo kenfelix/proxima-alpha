@@ -6,6 +6,8 @@ import { X } from "lucide-react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import { UserRepository } from "@/lib/repositories/UserRepository";
+import { NotificationService } from "@/lib/services/NotificationService";
 
 export function CreateIntentModal({ isOpen, onClose, userId }: { isOpen: boolean; onClose: () => void; userId: string }) {
   const router = useRouter();
@@ -39,6 +41,23 @@ export function CreateIntentModal({ isOpen, onClose, userId }: { isOpen: boolean
       };
       
       const docRef = await addDoc(collection(db, "intents"), intentData);
+
+      // Notify all connections
+      try {
+        const creatorProfile = await UserRepository.getUser(userId);
+        if (creatorProfile && creatorProfile.connections?.length > 0) {
+          await NotificationService.sendNotification(
+            creatorProfile.connections,
+            "New Intent! 👀",
+            `${creatorProfile.name} is down to ${activity.trim()}. Are you?`,
+            `${window.location.origin}/intents/${docRef.id}`,
+            'intent'
+          );
+        }
+      } catch (notifyErr) {
+        console.error("Failed to notify connections", notifyErr);
+      }
+
       router.push(`/intents/${docRef.id}`);
     } catch (e) {
       console.error("Error adding document: ", e);

@@ -362,7 +362,9 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
                 <div className="flex items-start text-neutral-300 border-b border-neutral-900 pb-5">
                   <Calendar className="w-6 h-6 text-white mr-4 mt-1 flex-shrink-0" />
                   <div>
-                    <p className="text-lg font-medium text-white">{event.date}</p>
+                    <p className="text-lg font-medium text-white">
+                      {event.time ? new Date(event.time).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'TBD'}
+                    </p>
                     <p className="text-sm text-neutral-500">Date scheduled</p>
                   </div>
                 </div>
@@ -370,7 +372,9 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
                 <div className="flex items-start text-neutral-300 border-b border-neutral-900 pb-5">
                   <Clock className="w-6 h-6 text-white mr-4 mt-1 flex-shrink-0" />
                   <div>
-                    <p className="text-lg font-medium text-white">{event.time}</p>
+                    <p className="text-lg font-medium text-white">
+                      {event.time ? new Date(event.time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'TBD'}
+                    </p>
                     <p className="text-sm text-neutral-500">Meeting time</p>
                   </div>
                 </div>
@@ -378,16 +382,18 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
                 <div className="flex items-start text-neutral-300 border-b border-neutral-900 pb-5">
                   <MapPin className="w-6 h-6 text-white mr-4 mt-1 flex-shrink-0" />
                   <div>
-                    <p className="text-lg font-medium text-white">{event.location}</p>
+                    <p className="text-lg font-medium text-white">{event.venue || 'TBD'}</p>
                     <p className="text-sm text-neutral-500">Venue / Location</p>
-                    <a 
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="inline-block mt-2 text-sm text-neutral-400 hover:text-white transition-colors"
-                    >
-                      Open in Maps ↗
-                    </a>
+                    {event.venue && (
+                      <a 
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.venue)}`} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="inline-block mt-2 text-sm text-neutral-400 hover:text-white transition-colors"
+                      >
+                        Open in Maps ↗
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>

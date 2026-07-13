@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { UserRepository } from "@/lib/repositories/UserRepository";
 import { NotificationService } from "@/lib/services/NotificationService";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function EventHubPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
@@ -19,7 +20,7 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
   const [rsvps, setRsvps] = useState<any[]>([]);
   const [checklist, setChecklist] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
-  const [profile, setProfile] = useState<any>(null);
+  const { profile } = useAuth();
   
   const [newItemText, setNewItemText] = useState("");
   const [newMessageText, setNewMessageText] = useState("");
@@ -28,10 +29,6 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Get profile
-    const profileStr = localStorage.getItem("proxima_user_profile");
-    if (profileStr) setProfile(JSON.parse(profileStr));
-
     // Fetch Event Details
     const fetchEvent = async () => {
       const docRef = doc(db, "events", eventId);
@@ -116,7 +113,7 @@ export default function EventHubPage({ params }: { params: Promise<{ id: string 
         text: newMessageText,
         userId: profile.id,
         name: profile.name,
-        avatar: profile.avatar,
+        avatar: profile.photoUrl || profile.name.charAt(0).toUpperCase(),
         timestamp: serverTimestamp()
       });
       setNewMessageText("");

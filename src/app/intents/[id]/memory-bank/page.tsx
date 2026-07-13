@@ -10,6 +10,7 @@ import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Hangout } from "@/lib/types";
+import imageCompression from 'browser-image-compression';
 
 export default function MemoryBankPage() {
   const params = useParams();
@@ -48,10 +49,31 @@ export default function MemoryBankPage() {
   }, [intentId, hangout]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    let file = e.target.files?.[0];
     if (!file || !user || !hangout) return;
+    
+    // reset input value so the same file can be uploaded again if needed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
     setUploading(true);
     setUploadProgress(0);
+
+    const isVideo = file.type.startsWith('video/');
+
+    try {
+      if (!isVideo) {
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true
+        };
+        file = await imageCompression(file as File, options);
+      }
+    } catch (error) {
+      console.error("Compression error:", error);
+    }
 
     const storageRef = ref(storage, `memories/${intentId}/${Date.now()}_${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);

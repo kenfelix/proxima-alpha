@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { UserRepository } from "@/lib/repositories/UserRepository";
 import { Button } from "@/components/ui/button";
 import { Compass, Calendar, Wallet, CheckCircle } from "lucide-react";
+import { getToken } from "firebase/messaging";
+import { doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { db, messaging } from "@/lib/firebase";
 
 interface OnboardingWizardProps {
   userId: string;
@@ -48,6 +51,25 @@ export function OnboardingWizard({ userId, onComplete }: OnboardingWizardProps) 
     } else {
       setIsCompleting(true);
       try {
+        // Automatically request notification permissions on user gesture
+        if (typeof window !== "undefined" && 'Notification' in window) {
+          try {
+            const permission = await Notification.requestPermission();
+            if (permission === "granted" && messaging) {
+              const token = await getToken(messaging, { 
+                vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY 
+              });
+              if (token) {
+                await updateDoc(doc(db, "users", userId), {
+                  deviceTokens: arrayUnion(token)
+                });
+              }
+            }
+          } catch (notifErr) {
+            console.error("Notification permission error during onboarding", notifErr);
+          }
+        }
+
         await UserRepository.completeOnboarding(userId);
         onComplete();
       } catch (error) {

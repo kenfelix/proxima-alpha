@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { NotificationService, AppNotification } from "@/lib/services/NotificationService";
@@ -21,11 +21,18 @@ export default function NotificationsPage() {
       try {
         const q = query(
           collection(db, "notifications"),
-          where("userId", "==", user.uid),
-          orderBy("createdAt", "desc")
+          where("userId", "==", user.uid)
         );
         const snapshot = await getDocs(q);
         const notifs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppNotification));
+        
+        // Sort in memory to avoid requiring a Firebase composite index
+        notifs.sort((a, b) => {
+          const timeA = a.createdAt?.seconds || 0;
+          const timeB = b.createdAt?.seconds || 0;
+          return timeB - timeA;
+        });
+
         setNotifications(notifs);
       } catch (e) {
         console.error("Error loading notifications", e);

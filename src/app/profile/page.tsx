@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
 export default function ProfilePage() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, logout } = useAuth();
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   
@@ -68,7 +68,16 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-black text-white p-6 sm:p-12 font-sans">
       <div className="max-w-2xl mx-auto pt-10">
-        <h1 className="text-4xl font-bold mb-2 tracking-tight">Your Identity</h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-4xl font-bold tracking-tight">Your Identity</h1>
+          <Button 
+            onClick={logout} 
+            variant="outline" 
+            className="border-neutral-800 bg-transparent text-neutral-400 hover:text-white hover:bg-neutral-900 rounded-full"
+          >
+            Log out
+          </Button>
+        </div>
         <p className="text-neutral-400 mb-10">Manage your Proxima profile and banking details.</p>
         
         <form onSubmit={handleSave} className="space-y-12">

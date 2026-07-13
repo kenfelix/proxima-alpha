@@ -6,6 +6,7 @@ import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { HangoutRepository } from "@/lib/repositories/HangoutRepository";
+import { UserRepository } from "@/lib/repositories/UserRepository";
 
 export default function CheckInPage() {
   const params = useParams();
@@ -27,6 +28,23 @@ export default function CheckInPage() {
       try {
         // Mark as present using the repository
         await HangoutRepository.markPresent(intentId, user.uid);
+
+        // Fetch the hangout to mutually connect with everyone who paid or checked in
+        const hangoutSnap = await getDoc(doc(db, "hangouts", intentId));
+        if (hangoutSnap.exists()) {
+          const hangoutData = hangoutSnap.data();
+          const paidAttendees = hangoutData.attendees || [];
+          const presentAttendees = hangoutData.presentAttendees || [];
+          const allPeers = Array.from(new Set([...paidAttendees, ...presentAttendees]));
+          
+          for (const otherUid of allPeers) {
+            if (otherUid !== user.uid) {
+              await UserRepository.addConnection(user.uid, otherUid);
+              await UserRepository.addConnection(otherUid, user.uid);
+            }
+          }
+        }
+
         setStatus("Success! Unlocking the Memory Bank...");
         
         // Redirect to memory bank after a short delay

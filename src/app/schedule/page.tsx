@@ -28,10 +28,31 @@ export default function SchedulePage() {
         
         for (const id of eventIds) {
           try {
-            const docRef = doc(db, "events", id);
-            const docSnap = await getDoc(docRef);
+            let docRef = doc(db, "events", id);
+            let docSnap = await getDoc(docRef);
+            
+            if (!docSnap.exists()) {
+              // Try hangouts collection
+              docRef = doc(db, "hangouts", id);
+              docSnap = await getDoc(docRef);
+            }
+            
+            if (!docSnap.exists()) {
+              // Try intents collection if hangout not yet created
+              docRef = doc(db, "intents", id);
+              docSnap = await getDoc(docRef);
+            }
+            
             if (docSnap.exists()) {
-              fetchedEvents.push({ id, ...docSnap.data() });
+              const data = docSnap.data();
+              fetchedEvents.push({ 
+                id, 
+                title: data.title || data.activity || "Hangout",
+                date: data.confirmedTime ? new Date(data.confirmedTime).toLocaleDateString() : data.timeframe || "TBD",
+                time: data.confirmedTime ? new Date(data.confirmedTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
+                location: data.confirmedVenue || data.location || "TBD",
+                ...data 
+              });
             }
           } catch (e) {
             console.error("Failed to fetch event", id);
@@ -98,7 +119,7 @@ export default function SchedulePage() {
                 transition={{ delay: idx * 0.1 }}
                 key={event.id}
               >
-                <Link href={`/events/${event.id}/hub`}>
+                <Link href={`/intents/${event.id}/hub`}>
                   <div className="group border border-neutral-900 hover:border-neutral-700 rounded-3xl p-6 transition-all cursor-pointer flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
                       <h2 className="text-xl font-bold mb-2 text-white">{event.title}</h2>

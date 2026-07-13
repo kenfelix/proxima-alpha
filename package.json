@@ -40,5 +40,14 @@
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@^1.4.15",
+    "source-map": "^0.7.4",
+    "uuid": "$uuid",
+    "rimraf": "^6.0.0",
+    "glob": {
+      "rimraf": "^6.0.0"
+    }
   }
 }

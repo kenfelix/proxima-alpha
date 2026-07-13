@@ -1,20 +1,23 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Suspense } from "react";
 
-export default function LoginPage() {
+function LoginContent() {
   const { user, loading, signInWithGoogle } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!loading && user) {
-      router.push("/");
+      const redirectUrl = searchParams.get("redirect") || "/";
+      router.push(redirectUrl);
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, searchParams]);
 
   if (loading) {
     return (
@@ -74,5 +77,17 @@ export default function LoginPage() {
         </motion.div>
       </motion.div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      </main>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

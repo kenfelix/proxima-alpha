@@ -42,7 +42,7 @@ export default function IntentDetailsPage() {
 
   const handleImDown = async () => {
     if (!user || !intent) {
-      if (!user) router.push("/login");
+      if (!user) router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
     setIsJoining(true);
@@ -55,6 +55,14 @@ export default function IntentDetailsPage() {
       // Build Connection organically
       await UserRepository.addConnection(intent.creatorId, user.uid);
       await UserRepository.addConnection(user.uid, intent.creatorId);
+      
+      // Add to local schedule so it appears in The Ledger immediately
+      const myEventsStr = localStorage.getItem("proxima_my_events");
+      const myEvents = myEventsStr ? JSON.parse(myEventsStr) : [];
+      if (!myEvents.includes(intentId)) {
+        myEvents.push(intentId);
+        localStorage.setItem("proxima_my_events", JSON.stringify(myEvents));
+      }
       
       setIntent({
         ...intent,

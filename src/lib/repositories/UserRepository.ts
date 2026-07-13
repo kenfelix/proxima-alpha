@@ -30,5 +30,12 @@ export const UserRepository = {
     await updateDoc(docRef, {
       deviceTokens: arrayUnion(token)
     });
+  },
+
+  async completeOnboarding(userId: string): Promise<void> {
+    const docRef = doc(db, "users", userId);
+    await updateDoc(docRef, {
+      hasCompletedOnboarding: true
+    });
   }
 };

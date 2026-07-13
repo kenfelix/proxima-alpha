@@ -13,6 +13,7 @@ export interface UserProfile {
     accountNumber: string;
     accountName: string;
   };
+  hasCompletedOnboarding?: boolean;
 }
 
 export interface Intent {

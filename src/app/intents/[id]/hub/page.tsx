@@ -21,6 +21,7 @@ export default function HangoutPlannerPage() {
   const [intent, setIntent] = useState<Intent | null>(null);
   const [hangout, setHangout] = useState<Hangout | null>(null);
   const [hostProfile, setHostProfile] = useState<UserProfile | null>(null);
+  const [interestedProfiles, setInterestedProfiles] = useState<Record<string, UserProfile>>({});
   const [loading, setLoading] = useState(true);
 
   // New Poll Form State
@@ -61,6 +62,14 @@ export default function HangoutPlannerPage() {
       // Fetch Host Profile for Bank Details
       const hostData = await UserRepository.getUser(intentData.creatorId);
       setHostProfile(hostData);
+
+      // Fetch profiles of interested users
+      const profiles: Record<string, UserProfile> = {};
+      for (const uid of intentData.interestedUsers) {
+        const p = await UserRepository.getUser(uid);
+        if (p) profiles[uid] = p;
+      }
+      setInterestedProfiles(profiles);
 
       setLoading(false);
     }
@@ -188,9 +197,19 @@ export default function HangoutPlannerPage() {
   const handleVerifyPayment = async (userId: string) => {
     if (!hangout) return;
     await HangoutRepository.addAttendee(hangout.id, userId);
+
+    // Mutual connection with all other paid attendees
+    const currentAttendees = hangout.attendees || [];
+    for (const otherUid of currentAttendees) {
+      if (otherUid !== userId) {
+        await UserRepository.addConnection(userId, otherUid);
+        await UserRepository.addConnection(otherUid, userId);
+      }
+    }
+
     setHangout({
       ...hangout,
-      attendees: [...(hangout.attendees || []), userId]
+      attendees: [...currentAttendees, userId]
     });
   };
 
@@ -342,7 +361,9 @@ export default function HangoutPlannerPage() {
                       if (hasPaid) return null;
                       return (
                         <div key={uid} className="flex items-center justify-between border border-neutral-900 p-3 rounded-2xl">
-                          <span className="text-sm text-neutral-300">User {uid.substring(0,6)}...</span>
+                          <span className="text-sm text-neutral-300">
+                            {interestedProfiles[uid]?.name || `User ${uid.substring(0,6)}...`}
+                          </span>
                           <Button 
                             onClick={() => handleVerifyPayment(uid)}
                             size="sm"

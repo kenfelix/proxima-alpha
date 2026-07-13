@@ -34,17 +34,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Fetch or create Proxima profile
         let userProfile = await UserRepository.getUser(firebaseUser.uid);
         if (!userProfile) {
-          userProfile = {
-            id: firebaseUser.uid,
-            name: firebaseUser.displayName || "New User",
-            email: firebaseUser.email || "",
-            photoUrl: firebaseUser.photoURL || "",
-            connections: [],
-            vouchCount: 0,
-            reliabilityScore: 100, // Starts at 100%
-            deviceTokens: [],
-          };
-          await UserRepository.createUser(userProfile);
+            userProfile = {
+              id: firebaseUser.uid,
+              name: firebaseUser.displayName || "New User",
+              email: firebaseUser.email || "",
+              photoUrl: firebaseUser.photoURL || "",
+              connections: [],
+              vouchCount: 0,
+              reliabilityScore: 100, // Starts at 100%
+              deviceTokens: [],
+              hasCompletedOnboarding: false,
+            };
+            await UserRepository.createUser(userProfile);
         }
         setProfile(userProfile);
       } else {

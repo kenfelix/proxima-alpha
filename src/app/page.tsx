@@ -3,20 +3,33 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { query, collection, orderBy, getDocs, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
+import { UserRepository } from "@/lib/repositories/UserRepository";
+import { Intent, UserProfile } from "@/lib/types";
 import { NotificationPrompt } from "@/components/NotificationPrompt";
 import { CreateIntentModal } from "@/components/CreateIntentModal";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { Plus, Compass, Clock, MapPin, Users } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const [intents, setIntents] = useState<any[]>([]);
+  const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const [isLoadingIntents, setIsLoadingIntents] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (user && profile) {
+      if (profile.hasCompletedOnboarding === false) {
+        setShowOnboarding(true);
+      }
+    }
+  }, [user, profile]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -33,11 +46,23 @@ export default function Home() {
           where("interestedUsers", "array-contains", user.uid)
         );
         const snapshot = await getDocs(q);
-        const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        fetched.sort((a: any, b: any) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-        setIntents(fetched);
+        const fetchedIntents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        fetchedIntents.sort((a: any, b: any) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+        setIntents(fetchedIntents);
+
+        // Fetch user profiles for avatars
+        const profiles: Record<string, UserProfile> = {};
+        for (const intent of fetchedIntents) {
+          for (const uid of (intent as Intent).interestedUsers) {
+            if (!profiles[uid]) {
+              const p = await UserRepository.getUser(uid);
+              if (p) profiles[uid] = p;
+            }
+          }
+        }
+        setUserProfiles(profiles);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching intents:", err);
       } finally {
         setIsLoadingIntents(false);
       }
@@ -59,6 +84,16 @@ export default function Home() {
         <header className="mb-8 flex items-center justify-between border-b border-neutral-900 pb-4">
           <h1 className="text-2xl font-bold text-white">Home</h1>
         </header>
+
+        {showOnboarding && (
+          <OnboardingWizard 
+            userId={user.uid} 
+            onComplete={() => {
+              setShowOnboarding(false);
+              // Update local profile context state if needed, though refreshing will fetch it
+            }} 
+          />
+        )}
 
         <NotificationPrompt />
 
@@ -113,7 +148,7 @@ export default function Home() {
                   <div className="flex -space-x-2">
                     {intent.interestedUsers.slice(0, 5).map((u: string) => (
                       <div key={u} className="w-7 h-7 rounded-full bg-neutral-800 border-2 border-[#0a0a0a] flex items-center justify-center text-[9px] font-bold text-neutral-400">
-                        {u.substring(0, 2).toUpperCase()}
+                        {(userProfiles[u]?.name || "U").substring(0, 2).toUpperCase()}
                       </div>
                     ))}
                     {intent.interestedUsers.length > 5 && (

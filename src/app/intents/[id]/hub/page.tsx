@@ -219,6 +219,12 @@ export default function HangoutPlannerPage() {
     if (!hangout) return;
     await HangoutRepository.addAttendee(hangout.id, userId);
 
+    const hangoutRef = doc(db, "hangouts", hangout.id);
+    const updatedPending = (hangout.pendingPayments || []).filter(id => id !== userId);
+    await updateDoc(hangoutRef, {
+      pendingPayments: updatedPending
+    });
+
     // Mutual connection with all other paid attendees
     const currentAttendees = hangout.attendees || [];
     for (const otherUid of currentAttendees) {
@@ -230,7 +236,8 @@ export default function HangoutPlannerPage() {
 
     setHangout({
       ...hangout,
-      attendees: [...currentAttendees, userId]
+      attendees: [...currentAttendees, userId],
+      pendingPayments: updatedPending
     });
 
     // Notify the user that their payment was verified
@@ -244,6 +251,62 @@ export default function HangoutPlannerPage() {
       );
     } catch (e) {
       console.error("Failed to notify user of payment verification", e);
+    }
+  };
+
+  const handleClaimPayment = async () => {
+    if (!hangout || !user) return;
+    
+    const hangoutRef = doc(db, "hangouts", hangout.id);
+    await updateDoc(hangoutRef, {
+      pendingPayments: arrayUnion(user.uid)
+    });
+
+    const currentPending = hangout.pendingPayments || [];
+    setHangout({
+      ...hangout,
+      pendingPayments: [...currentPending, user.uid]
+    });
+
+    try {
+      const myProfile = interestedProfiles[user.uid];
+      await NotificationService.sendNotification(
+        [hangout.hostId],
+        "Payment Claimed! 💸",
+        `${myProfile?.name || 'Someone'} claims they've paid for ${hangout.title}. Check your ledger.`,
+        `${window.location.origin}/intents/${hangout.id}/hub`,
+        'payment'
+      );
+    } catch (e) {
+      console.error("Failed to notify host", e);
+    }
+  };
+
+  const handleRejectPayment = async (userId: string) => {
+    if (!hangout) return;
+    
+    const hangoutRef = doc(db, "hangouts", hangout.id);
+    const updatedPending = (hangout.pendingPayments || []).filter(id => id !== userId);
+    
+    await updateDoc(hangoutRef, {
+      pendingPayments: updatedPending
+    });
+
+    setHangout({
+      ...hangout,
+      pendingPayments: updatedPending
+    });
+
+    try {
+      await NotificationService.sendNotification(
+        [userId],
+        "Payment Verification Failed ❌",
+        `Your payment for ${hangout.title} could not be verified. Please contact the host or try again.`,
+        `${window.location.origin}/intents/${hangout.id}/hub`,
+        'payment'
+      );
+    } catch (e) {
+      console.error("Failed to notify user", e);
     }
   };
 
@@ -406,41 +469,95 @@ export default function HangoutPlannerPage() {
                   </div>
                   
                   <div className="space-y-2 mt-4">
-                    <h4 className="font-medium text-white mb-2">Pending Payments</h4>
+                    <h4 className="font-medium text-white mb-4">Attendee Ledger</h4>
                     {intent.interestedUsers.filter(uid => uid !== user.uid).map(uid => {
-                      const hasPaid = hangout.attendees.includes(uid);
-                      if (hasPaid) return null;
+                      const hasPaid = hangout.attendees?.includes(uid);
+                      const isPending = hangout.pendingPayments?.includes(uid);
+                      
                       return (
-                        <div key={uid} className="flex items-center justify-between border border-neutral-900 p-3 rounded-2xl">
-                          <span className="text-sm text-neutral-300">
-                            {interestedProfiles[uid]?.name || `User ${uid.substring(0,6)}...`}
-                          </span>
-                          <Button 
-                            onClick={() => handleVerifyPayment(uid)}
-                            size="sm"
-                            className="bg-white hover:bg-neutral-200 text-black rounded-full px-4"
-                          >
-                            Mark Paid
-                          </Button>
+                        <div key={uid} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                          hasPaid ? "border-green-500/20 bg-green-500/5" : 
+                          isPending ? "border-amber-500/50 bg-amber-500/10" : 
+                          "border-neutral-900"
+                        }`}>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-white">
+                              {interestedProfiles[uid]?.name || `User ${uid.substring(0,6)}...`}
+                            </span>
+                            <span className={`text-xs ${
+                              hasPaid ? "text-green-400" : 
+                              isPending ? "text-amber-400 font-semibold" : 
+                              "text-neutral-500"
+                            }`}>
+                              {hasPaid ? "Payment Verified" : isPending ? "Verification Pending" : "Awaiting Payment"}
+                            </span>
+                          </div>
+                          
+                          {!hasPaid && (
+                            <div className="flex gap-2">
+                              {isPending && (
+                                <Button 
+                                  onClick={() => handleRejectPayment(uid)}
+                                  size="sm"
+                                  className="bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-full px-3"
+                                >
+                                  Reject
+                                </Button>
+                              )}
+                              <Button 
+                                onClick={() => handleVerifyPayment(uid)}
+                                size="sm"
+                                className={isPending ? "bg-amber-500 hover:bg-amber-400 text-black rounded-full px-4 font-bold" : "bg-white hover:bg-neutral-200 text-black rounded-full px-4"}
+                              >
+                                Verify
+                              </Button>
+                            </div>
+                          )}
+                          {hasPaid && (
+                            <svg className="w-6 h-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 </div>
               ) : (
-                <div className="bg-neutral-900 p-6 rounded-3xl text-center">
-                  <p className="text-xs uppercase tracking-widest text-neutral-400 mb-2 font-bold">Host Bank Details</p>
-                  {hostProfile?.hostPaymentDetails?.accountNumber ? (
-                    <div className="space-y-2">
-                      <p className="text-lg font-medium text-white">{hostProfile.hostPaymentDetails.bankName}</p>
-                      <p className="text-2xl font-bold text-white tracking-wider">{hostProfile.hostPaymentDetails.accountNumber}</p>
-                      <p className="text-neutral-400">{hostProfile.hostPaymentDetails.accountName}</p>
+                <div className="space-y-6">
+                  <div className="bg-neutral-900 p-6 rounded-3xl text-center">
+                    <p className="text-xs uppercase tracking-widest text-neutral-400 mb-2 font-bold">Host Bank Details</p>
+                    {hostProfile?.hostPaymentDetails?.accountNumber ? (
+                      <div className="space-y-2">
+                        <p className="text-lg font-medium text-white">{hostProfile.hostPaymentDetails.bankName}</p>
+                        <p className="text-2xl font-bold text-white tracking-wider">{hostProfile.hostPaymentDetails.accountNumber}</p>
+                        <p className="text-neutral-400">{hostProfile.hostPaymentDetails.accountName}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="font-medium text-xl text-white mb-1">Awaiting details...</p>
+                        <p className="text-sm text-neutral-500">The host has not linked their bank account yet.</p>
+                      </>
+                    )}
+                  </div>
+                  
+                  {hangout.attendees?.includes(user?.uid || '') ? (
+                    <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-2xl flex items-center justify-center gap-2">
+                      <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      <p className="text-green-400 font-semibold">Payment Confirmed! 🎉</p>
                     </div>
+                  ) : hangout.pendingPayments?.includes(user?.uid || '') ? (
+                    <Button 
+                      disabled
+                      className="w-full py-6 bg-neutral-800 text-neutral-400 rounded-full font-bold opacity-80"
+                    >
+                      Verification Pending...
+                    </Button>
                   ) : (
-                    <>
-                      <p className="font-medium text-xl text-white mb-1">Awaiting details...</p>
-                      <p className="text-sm text-neutral-500">The host has not linked their bank account yet.</p>
-                    </>
+                    <Button 
+                      onClick={handleClaimPayment}
+                      className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full font-bold shadow-lg shadow-indigo-600/20"
+                    >
+                      I've Sent the Money
+                    </Button>
                   )}
                 </div>
               )}

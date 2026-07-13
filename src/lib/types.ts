@@ -64,4 +64,5 @@ export interface Hangout {
   // Roster
   attendees: string[]; // Array of User IDs who are confirmed/paid
   presentAttendees: string[]; // Array of User IDs who checked in via QR
+  pendingPayments?: string[]; // Array of User IDs who tapped "I've Paid"
 }

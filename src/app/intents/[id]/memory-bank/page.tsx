@@ -156,8 +156,16 @@ export default function MemoryBankPage() {
                  </div>
                  <h2 className="text-2xl font-bold mb-3 text-white">Memory Bank Locked</h2>
                  <p className="text-neutral-400 max-w-md mb-8 leading-relaxed">
-                   You must physically attend the hangout to unlock this vault. Ask the host to scan their In-Person Bump QR code.
+                   You must physically attend the hangout to unlock this vault.
                  </p>
+                 <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl w-full max-w-sm">
+                   <h3 className="text-white font-bold mb-2">How to unlock:</h3>
+                   <ol className="text-neutral-400 text-sm text-left space-y-3 list-decimal pl-5">
+                     <li>Find the Host in person.</li>
+                     <li>Open your phone's regular <strong>Camera App</strong>.</li>
+                     <li>Scan the Host's "Check-in QR Code".</li>
+                   </ol>
+                 </div>
                </div>
             </div>
           )}

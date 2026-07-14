@@ -5,8 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import QRCode from "react-qr-code";
 import { doc, getDoc, collection, addDoc, query, onSnapshot, orderBy } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
+import axios from "axios";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Hangout } from "@/lib/types";
@@ -63,34 +63,44 @@ export default function MemoryBankPage() {
     const isVideo = file.type.startsWith('video/');
     setTempFile({ url: URL.createObjectURL(file), type: isVideo ? 'video' : 'image' });
 
-    const storageRef = ref(storage, `memories/${intentId}/${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ml_default');
 
-    uploadTask.on('state_changed', 
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      }, 
-      (error) => {
-        console.error("Error uploading:", error);
-        alert("Failed to upload memory.");
-        setUploading(false);
-        setUploadProgress(null);
-        setTempFile(null);
-      }, 
-      async () => {
-        const url = await getDownloadURL(uploadTask.snapshot.ref);
-        await addDoc(collection(db, "hangouts", intentId, "memories"), {
-          url,
-          uploadedBy: user.uid,
-          createdAt: new Date().getTime(),
-          type: file.type.startsWith('video/') ? 'video' : 'image'
-        });
-        setUploading(false);
-        setUploadProgress(null);
-        setTempFile(null);
-      }
-    );
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'sliywghu';
+    const resourceType = isVideo ? 'video' : 'image';
+
+    try {
+      const response = await axios.post(
+        `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
+        formData,
+        {
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const progress = (progressEvent.loaded / progressEvent.total) * 100;
+              setUploadProgress(progress);
+            }
+          }
+        }
+      );
+
+      const url = response.data.secure_url;
+      await addDoc(collection(db, "hangouts", intentId, "memories"), {
+        url,
+        uploadedBy: user.uid,
+        createdAt: new Date().getTime(),
+        type: resourceType
+      });
+      setUploading(false);
+      setUploadProgress(null);
+      setTempFile(null);
+    } catch (error) {
+      console.error("Error uploading to Cloudinary:", error);
+      alert("Failed to upload memory.");
+      setUploading(false);
+      setUploadProgress(null);
+      setTempFile(null);
+    }
   };
 
   if (loading) return <div className="min-h-screen bg-neutral-950 flex items-center justify-center"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>;

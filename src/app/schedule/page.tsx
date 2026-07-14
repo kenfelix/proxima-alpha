@@ -1,70 +1,77 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, query, getDocs, where, or } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { motion } from "framer-motion";
 import { Calendar, MapPin, Clock } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SchedulePage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
+  const { user, profile } = useAuth();
 
   useEffect(() => {
     const fetchMyEvents = async () => {
-      // Get profile
-      const profileStr = localStorage.getItem("proxima_user_profile");
-      if (profileStr) {
-        setProfile(JSON.parse(profileStr));
+      if (!user) {
+        setLoading(false);
+        return;
       }
 
-      // Get saved events
-      const myEventsStr = localStorage.getItem("proxima_my_events");
-      if (myEventsStr) {
-        const eventIds = JSON.parse(myEventsStr);
-        const fetchedEvents = [];
-        
-        for (const id of eventIds) {
-          try {
-            let docRef = doc(db, "events", id);
-            let docSnap = await getDoc(docRef);
-            
-            if (!docSnap.exists()) {
-              // Try hangouts collection
-              docRef = doc(db, "hangouts", id);
-              docSnap = await getDoc(docRef);
-            }
-            
-            if (!docSnap.exists()) {
-              // Try intents collection if hangout not yet created
-              docRef = doc(db, "intents", id);
-              docSnap = await getDoc(docRef);
-            }
-            
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              fetchedEvents.push({ 
-                id, 
-                title: data.title || data.activity || "Hangout",
-                date: data.confirmedTime ? new Date(data.confirmedTime).toLocaleDateString() : data.timeframe || "TBD",
-                time: data.confirmedTime ? new Date(data.confirmedTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
-                location: data.confirmedVenue || data.location || "TBD",
-                ...data 
-              });
-            }
-          } catch (e) {
-            console.error("Failed to fetch event", id);
+      const fetchedEventsMap = new Map();
+
+      const addDocs = (snapshot: any, collectionName: string) => {
+        snapshot.docs.forEach((docSnap: any) => {
+          const data = docSnap.data();
+          const id = docSnap.id;
+          if (!fetchedEventsMap.has(id)) {
+            fetchedEventsMap.set(id, {
+              id,
+              collectionName,
+              title: data.title || data.activity || "Hangout",
+              date: data.confirmedTime ? new Date(data.confirmedTime).toLocaleDateString() : data.timeframe || "TBD",
+              time: data.confirmedTime ? new Date(data.confirmedTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
+              location: data.confirmedVenue || data.location || "TBD",
+              ...data
+            });
           }
-        }
-        setEvents(fetchedEvents);
+        });
+      };
+
+      try {
+        // Events
+        const eventsQ = query(
+          collection(db, "events"), 
+          or(where("hostId", "==", user.uid), where("attendees", "array-contains", user.uid))
+        );
+        addDocs(await getDocs(eventsQ), "events");
+
+        // Hangouts
+        const hangoutsQ = query(
+          collection(db, "hangouts"), 
+          or(where("hostId", "==", user.uid), where("attendees", "array-contains", user.uid))
+        );
+        addDocs(await getDocs(hangoutsQ), "hangouts");
+
+        // Intents
+        const intentsQ = query(
+          collection(db, "intents"), 
+          or(where("hostId", "==", user.uid), where("interestedUsers", "array-contains", user.uid))
+        );
+        addDocs(await getDocs(intentsQ), "intents");
+
+        setEvents(Array.from(fetchedEventsMap.values()));
+      } catch (e) {
+        console.error("Failed to fetch events", e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchMyEvents();
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (

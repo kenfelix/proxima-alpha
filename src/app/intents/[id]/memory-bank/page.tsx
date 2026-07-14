@@ -23,6 +23,7 @@ export default function MemoryBankPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [tempFile, setTempFile] = useState<{url: string, type: string} | null>(null);
+  const [selectedMemoryIndex, setSelectedMemoryIndex] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchHangout() {
@@ -110,6 +111,35 @@ export default function MemoryBankPage() {
   const isPresent = user && (hangout.presentAttendees?.includes(user.uid) || isHost);
 
   const checkInUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/intents/${intentId}/check-in`;
+
+  const handleNext = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (selectedMemoryIndex !== null && selectedMemoryIndex < memories.length - 1) {
+      setSelectedMemoryIndex(selectedMemoryIndex + 1);
+    }
+  };
+
+  const handlePrev = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (selectedMemoryIndex !== null && selectedMemoryIndex > 0) {
+      setSelectedMemoryIndex(selectedMemoryIndex - 1);
+    }
+  };
+
+  const handleDownload = (e: React.MouseEvent, url: string, type: string) => {
+    e.stopPropagation();
+    let downloadUrl = url;
+    if (url.includes('/upload/')) {
+       downloadUrl = url.replace('/upload/', '/upload/fl_attachment/');
+    }
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `memory-${Date.now()}.${type === 'video' ? 'mp4' : 'jpg'}`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   return (
     <main className="min-h-screen bg-black text-white p-6 sm:p-12 font-sans">
@@ -227,15 +257,16 @@ export default function MemoryBankPage() {
                       </div>
                     </motion.div>
                   )}
-                  {memories.map((mem) => (
+                  {memories.map((mem, index) => (
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       key={mem.id} 
-                      className="aspect-square bg-neutral-800 rounded-2xl overflow-hidden relative group"
+                      className="aspect-square bg-neutral-800 rounded-2xl overflow-hidden relative group cursor-pointer"
+                      onClick={() => setSelectedMemoryIndex(index)}
                     >
                       {mem.type === 'video' ? (
-                        <video src={mem.url} controls className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                        <video src={mem.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                       ) : (
                         <img src={mem.url} alt="Memory" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                       )}
@@ -251,6 +282,58 @@ export default function MemoryBankPage() {
 
         </div>
       </div>
+
+      {/* Lightbox Modal */}
+      {selectedMemoryIndex !== null && memories[selectedMemoryIndex] && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-4 sm:p-8"
+          onClick={() => setSelectedMemoryIndex(null)}
+        >
+          {/* Top Bar */}
+          <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10 bg-gradient-to-b from-black/80 to-transparent">
+             <div className="text-white/60 text-sm font-medium tracking-widest uppercase">
+               {new Date(memories[selectedMemoryIndex].createdAt).toLocaleString()}
+             </div>
+             <div className="flex items-center gap-4">
+               <button 
+                 onClick={(e) => handleDownload(e, memories[selectedMemoryIndex].url, memories[selectedMemoryIndex].type)}
+                 className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-md"
+               >
+                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+               </button>
+               <button 
+                 onClick={() => setSelectedMemoryIndex(null)}
+                 className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-md"
+               >
+                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+               </button>
+             </div>
+          </div>
+
+          {/* Media Content */}
+          <div className="relative w-full max-w-5xl max-h-[80vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {selectedMemoryIndex > 0 && (
+              <button onClick={handlePrev} className="absolute left-0 p-4 text-white/50 hover:text-white transition-colors -ml-4 sm:-ml-12 z-20">
+                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+            )}
+
+            <div className="w-full h-full flex justify-center items-center">
+               {memories[selectedMemoryIndex].type === 'video' ? (
+                 <video src={memories[selectedMemoryIndex].url} controls autoPlay className="max-w-full max-h-[80vh] rounded-lg shadow-2xl" />
+               ) : (
+                 <img src={memories[selectedMemoryIndex].url} alt="Memory" className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl" />
+               )}
+            </div>
+
+            {selectedMemoryIndex < memories.length - 1 && (
+              <button onClick={handleNext} className="absolute right-0 p-4 text-white/50 hover:text-white transition-colors -mr-4 sm:-mr-12 z-20">
+                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

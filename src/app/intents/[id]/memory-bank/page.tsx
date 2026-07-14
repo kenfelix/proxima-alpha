@@ -10,7 +10,6 @@ import { db, storage } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Hangout } from "@/lib/types";
-import imageCompression from 'browser-image-compression';
 
 export default function MemoryBankPage() {
   const params = useParams();
@@ -23,6 +22,7 @@ export default function MemoryBankPage() {
   const [memories, setMemories] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [tempFile, setTempFile] = useState<{url: string, type: string} | null>(null);
 
   useEffect(() => {
     async function fetchHangout() {
@@ -61,21 +61,7 @@ export default function MemoryBankPage() {
     setUploadProgress(0);
 
     const isVideo = file.type.startsWith('video/');
-
-    try {
-      if (!isVideo) {
-        const options = {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 1920,
-          useWebWorker: false // Worker sometimes hangs in Next.js
-        };
-        file = await imageCompression(file as File, options);
-      }
-    } catch (error) {
-      console.error("Compression error:", error);
-      // Fallback to the original file if compression fails
-      file = e.target.files?.[0] as File;
-    }
+    setTempFile({ url: URL.createObjectURL(file), type: isVideo ? 'video' : 'image' });
 
     const storageRef = ref(storage, `memories/${intentId}/${Date.now()}_${file.name}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
@@ -90,6 +76,7 @@ export default function MemoryBankPage() {
         alert("Failed to upload memory.");
         setUploading(false);
         setUploadProgress(null);
+        setTempFile(null);
       }, 
       async () => {
         const url = await getDownloadURL(uploadTask.snapshot.ref);
@@ -101,6 +88,7 @@ export default function MemoryBankPage() {
         });
         setUploading(false);
         setUploadProgress(null);
+        setTempFile(null);
       }
     );
   };
@@ -204,12 +192,31 @@ export default function MemoryBankPage() {
                 </div>
               </div>
 
-              {memories.length === 0 ? (
+              {memories.length === 0 && !tempFile ? (
                 <div className="border border-neutral-900 border-dashed rounded-3xl p-12 text-center">
                   <p className="text-neutral-500">No memories uploaded yet. Be the first!</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {tempFile && uploading && uploadProgress !== null && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="aspect-square bg-neutral-800 rounded-2xl overflow-hidden relative"
+                    >
+                      {tempFile.type === 'video' ? (
+                        <video src={tempFile.url} className="w-full h-full object-cover opacity-40 blur-sm" />
+                      ) : (
+                        <img src={tempFile.url} alt="Uploading..." className="w-full h-full object-cover opacity-40 blur-sm" />
+                      )}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <div className="relative w-12 h-12 flex items-center justify-center mb-2">
+                           <div className="absolute inset-0 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+                        </div>
+                        <span className="text-white font-bold text-sm drop-shadow-md">{Math.round(uploadProgress)}%</span>
+                      </div>
+                    </motion.div>
+                  )}
                   {memories.map((mem) => (
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.9 }}
